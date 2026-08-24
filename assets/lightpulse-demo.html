@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PulsingLight — Balloon-Tamponade Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<style>
+:root{
+  --blue-700:#1e40af;--blue-600:#2563eb;--blue-50:#eff6ff;
+  --accent:#14b8a6;--accent-d:#0d9488;--ok:#16a34a;--blood:#e05a5a;--blood-d:#c23b3b;
+  --ink:#0f172a;--slate:#475569;--muted:#94a3b8;--line:#e2e8f0;
+  --radius:20px;--shadow:0 10px 30px rgba(15,42,94,.08);--shadow-l:0 20px 50px rgba(15,42,94,.14);
+  --font:'Inter',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);color:var(--ink);background:#f4f7fb;-webkit-font-smoothing:antialiased;
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:26px 18px 56px}
+
+/* header + tabs */
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1.3rem;letter-spacing:-.02em;color:var(--blue-700)}
+.brand b{color:var(--ink)}
+.brand .mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(135deg,var(--blue-600),var(--accent));color:#fff}
+.brand .mark svg{width:18px;height:18px}
+.sub{color:var(--muted);font-size:.88rem;margin:4px 0 22px}
+.tabs{display:inline-flex;background:#fff;border:1px solid var(--line);border-radius:999px;padding:5px;box-shadow:var(--shadow);margin-bottom:26px}
+.tab{cursor:pointer;font-family:inherit;font-weight:700;font-size:.92rem;padding:10px 22px;border-radius:999px;border:0;background:transparent;color:var(--slate);transition:.18s}
+.tab:hover{color:var(--blue-600)}
+.tab.active{background:var(--blue-600);color:#fff}
+
+.panel{width:100%;max-width:920px;display:none}
+.panel.show{display:block}
+
+.card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-l);overflow:hidden}
+.card-top{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--line)}
+.card-top .t{font-weight:700;font-size:.95rem}
+.card-top .badge{font-weight:700;font-size:.8rem;color:var(--blue-600)}
+
+/* animation */
+.stage-svg{background:linear-gradient(180deg,#f2f7ff,#fff);padding:8px}
+.stage-svg svg{display:block;width:100%;height:auto;max-height:60vh}
+.steps{display:flex;gap:8px;padding:14px 20px 4px;flex-wrap:wrap}
+.pill{cursor:pointer;font-family:inherit;font-weight:700;font-size:.82rem;padding:9px 14px;border-radius:999px;
+  border:1.5px solid var(--line);background:#fff;color:var(--slate);transition:.18s;display:flex;align-items:center;gap:7px}
+.pill .n{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--blue-50);color:var(--blue-600);font-size:.72rem}
+.pill:hover{border-color:var(--blue-600);color:var(--blue-600)}
+.pill.active{background:var(--blue-600);color:#fff;border-color:var(--blue-600)}
+.pill.active .n{background:rgba(255,255,255,.25);color:#fff}
+.caption{padding:8px 20px 14px;font-weight:600;color:var(--slate);font-size:.95rem}
+.caption b{color:var(--ink)}
+.ctrl{display:flex;gap:10px;align-items:center;padding:14px 20px;border-top:1px solid var(--line);flex-wrap:wrap}
+.progress{flex:1;height:6px;background:var(--line);border-radius:999px;overflow:hidden;min-width:100px}
+.progress>i{display:block;height:100%;background:var(--accent);width:25%;transition:width .5s ease}
+
+.btn{display:inline-flex;align-items:center;gap:8px;cursor:pointer;border:0;font-family:inherit;font-weight:600;
+  font-size:.95rem;padding:12px 20px;border-radius:999px;transition:transform .15s,box-shadow .2s,background .2s}
+.btn-accent{background:var(--accent);color:#fff;box-shadow:0 8px 18px rgba(20,184,166,.3)}
+.btn-accent:hover{transform:translateY(-2px);background:var(--accent-d)}
+.btn-ghost{background:#fff;color:var(--blue-700);border:1.5px solid var(--line)}
+.btn-ghost:hover{border-color:var(--blue-600);color:var(--blue-600)}
+.btn-ghost.on{background:var(--blue-600);color:#fff;border-color:var(--blue-600)}
+
+/* 3d */
+.model-stage{position:relative;height:min(62vh,540px);background:radial-gradient(700px 420px at 50% 25%,var(--blue-50),#fff)}
+#three-canvas{width:100%;height:100%;display:block;cursor:grab}
+#three-canvas:active{cursor:grabbing}
+.model-hint{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:rgba(15,42,94,.82);
+  color:#fff;font-size:.8rem;font-weight:600;padding:7px 15px;border-radius:999px;display:flex;gap:8px;align-items:center}
+.icon-btn{position:absolute;top:14px;right:14px;width:42px;height:42px;border-radius:12px;border:1px solid var(--line);
+  background:rgba(255,255,255,.92);display:grid;place-items:center;cursor:pointer;color:var(--slate);transition:.18s}
+.icon-btn:hover{color:var(--blue-600);border-color:var(--blue-600)}
+.icon-btn.on{background:var(--blue-600);color:#fff;border-color:var(--blue-600)}
+.model-fallback{position:absolute;inset:0;display:none;place-items:center;padding:26px;text-align:center;color:var(--slate);font-size:.9rem}
+</style>
+</head>
+<body>
+
+<div class="brand">
+  <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.35-7-10a4 4 0 0 1 7-2.65A4 4 0 0 1 19 11c0 5.65-7 10-7 10z"/></svg></span>
+  Pulsing<b>Light</b>
+</div>
+<div class="sub">Balloon-tamponade bleeding-control device — interactive prototype</div>
+
+<!-- unified single-view demo (device + wound cross-section combined) -->
+
+<!-- ================= HOW IT WORKS ================= -->
+<section class="panel" id="panel-how">
+  <div class="card">
+    <div class="card-top"><span class="t">Mechanism — internal pressure + clotting</span><span class="badge" id="stepTag">Step 1 / 4</span></div>
+
+    <div class="stage-svg">
+      <svg id="scene" viewBox="0 0 640 400" role="img" aria-label="PulsingLight balloon-tamponade mechanism">
+        <defs>
+          <linearGradient id="tissueG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbe3de"/><stop offset="1" stop-color="#f1c4bb"/></linearGradient>
+          <linearGradient id="skinG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7d9d0"/><stop offset="1" stop-color="#e9b6a8"/></linearGradient>
+          <linearGradient id="shaftG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e6ecf5"/><stop offset=".5" stop-color="#ffffff"/><stop offset="1" stop-color="#cfd8e6"/></linearGradient>
+          <radialGradient id="balloonG" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#7fe6da"/><stop offset="1" stop-color="#14b8a6"/></radialGradient>
+          <clipPath id="tissueClip"><rect x="40" y="120" width="560" height="260" rx="20"/></clipPath>
+        </defs>
+
+        <!-- tissue -->
+        <rect x="40" y="120" width="560" height="260" rx="20" fill="url(#tissueG)"/>
+        <rect x="40" y="120" width="560" height="26" rx="10" fill="url(#skinG)"/>
+        <line x1="40" y1="146" x2="600" y2="146" stroke="#d59a8c" stroke-width="1.5"/>
+
+        <g clip-path="url(#tissueClip)">
+          <!-- wound tract / cavity -->
+          <path id="cavity" d="M300 120 L340 120 L332 250 Q320 300 308 250 Z" fill="#7f2d2d" opacity=".75"/>
+
+          <!-- bleeding vessels inside the tract -->
+          <g id="vesselL">
+            <path d="M250 150 C258 200 262 250 268 300" stroke="var(--blood-d)" stroke-width="11" fill="none" stroke-linecap="round"/>
+            <path d="M250 150 C258 200 262 250 268 300" stroke="var(--blood)" stroke-width="5" fill="none" stroke-linecap="round"/>
+            <g class="bleed bleedL">
+              <circle cx="270" cy="200" r="5" fill="var(--blood)"/>
+              <circle cx="274" cy="240" r="4" fill="var(--blood)"/>
+              <circle cx="272" cy="270" r="4.5" fill="var(--blood)"/>
+            </g>
+          </g>
+          <g id="vesselR">
+            <path d="M392 150 C384 200 380 250 374 300" stroke="var(--blood-d)" stroke-width="11" fill="none" stroke-linecap="round"/>
+            <path d="M392 150 C384 200 380 250 374 300" stroke="var(--blood)" stroke-width="5" fill="none" stroke-linecap="round"/>
+            <g class="bleed bleedR">
+              <circle cx="372" cy="200" r="5" fill="var(--blood)"/>
+              <circle cx="368" cy="240" r="4" fill="var(--blood)"/>
+              <circle cx="370" cy="270" r="4.5" fill="var(--blood)"/>
+            </g>
+          </g>
+
+          <!-- pressure arrows (tamponade) -->
+          <g id="press" opacity="0">
+            <path d="M321 235 l-34 0 m6 -6 l-8 6 8 6" stroke="#0d9488" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M321 235 l34 0 m-6 -6 l8 6 -8 6" stroke="#0d9488" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </g>
+        </g>
+
+        <!-- catheter + balloon (slides in) -->
+        <g id="cath" transform="translate(0,-230)" opacity="0">
+          <rect x="313" y="20" width="14" height="215" rx="7" fill="url(#shaftG)" stroke="#c3ccdb" stroke-width="1.5"/>
+          <circle cx="320" cy="40" r="5" fill="var(--accent)"/>
+          <!-- balloon / gel tip -->
+          <ellipse id="balloon" cx="320" cy="240" rx="9" ry="22" fill="url(#balloonG)" stroke="#0d9488" stroke-width="1.5"/>
+          <!-- clotting-agent particles on the surface -->
+          <g id="clot" opacity="0">
+            <circle cx="320" cy="188" r="3" fill="#fde68a"/><circle cx="352" cy="212" r="3" fill="#fff"/>
+            <circle cx="360" cy="248" r="3" fill="#fde68a"/><circle cx="344" cy="284" r="3" fill="#fff"/>
+            <circle cx="300" cy="292" r="3" fill="#fde68a"/><circle cx="284" cy="256" r="3" fill="#fff"/>
+            <circle cx="290" cy="212" r="3" fill="#fde68a"/><circle cx="336" cy="196" r="2.5" fill="#fff"/>
+          </g>
+        </g>
+
+        <!-- bleeding-stopped badge -->
+        <g id="okBadge" opacity="0" transform="translate(320,338)">
+          <g transform="translate(-90,-20)">
+            <rect x="0" y="0" width="180" height="40" rx="20" fill="#f0fdf4" stroke="var(--ok)" stroke-width="2"/>
+            <circle cx="24" cy="20" r="11" fill="var(--ok)"/>
+            <path d="M19 20 l3.5 3.5 L29 16" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            <text x="44" y="25" font-family="Inter,sans-serif" font-weight="800" font-size="14" fill="#15803d">Bleeding stopped</text>
+          </g>
+        </g>
+      </svg>
+    </div>
+
+    <div class="steps">
+      <button class="pill active" data-step="0"><span class="n">1</span>Wound</button>
+      <button class="pill" data-step="1"><span class="n">2</span>Insert</button>
+      <button class="pill" data-step="2"><span class="n">3</span>Expand</button>
+      <button class="pill" data-step="3"><span class="n">4</span>Clot &amp; seal</button>
+    </div>
+    <div class="caption" id="caption"><b>Bleeding vessels inside the wound tract.</b> A penetrating wound leaves vessels bleeding deep inside where a hand can't reach.</div>
+
+    <div class="ctrl">
+      <button class="btn btn-accent" id="playBtn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        <span id="playLabel">Play</span>
+      </button>
+      <button class="btn btn-ghost" id="resetBtn">Reset</button>
+      <button class="btn btn-ghost" id="loopBtn" title="Auto-play loop">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        Loop
+      </button>
+      <div class="progress"><i id="prog"></i></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= CONCEPT MODEL ================= -->
+<section class="panel show" id="panel-model">
+  <div class="card">
+    <div class="card-top"><span class="t">PulsingLight — live demo: device entering the wound</span><span class="badge">Drag · scroll to zoom</span></div>
+    <div class="model-stage">
+      <canvas id="three-canvas"></canvas>
+      <button class="icon-btn on" id="labelBtn" title="Toggle callouts" style="right:64px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+      </button>
+      <button class="icon-btn" id="spinBtn" title="Toggle auto-rotate">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v5h-5"/></svg>
+      </button>
+      <div style="position:absolute;left:14px;bottom:14px;display:flex;gap:10px">
+        <button class="btn btn-accent" id="gelBtn" style="padding:11px 18px;font-size:.9rem">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          Play
+        </button>
+        <button class="btn btn-ghost on" id="loopSeqBtn" title="Auto-loop" style="padding:11px 16px;font-size:.9rem">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          Loop
+        </button>
+      </div>
+      <div class="model-hint">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12h16M4 12l4-4M4 12l4 4M20 12l-4-4M20 12l-4 4"/></svg>
+        Drag to rotate · scroll to zoom · Play to run the full sequence
+      </div>
+      <div class="model-fallback" id="modelFallback">3D preview needs internet on first load.</div>
+    </div>
+  </div>
+</section>
+
+<script>
+/* ================= tab switching ================= */
+const tabs=[...document.querySelectorAll(".tab")];
+const panels={how:document.getElementById("panel-how"),model:document.getElementById("panel-model")};
+let onTabShow=null;
+tabs.forEach(t=>t.addEventListener("click",()=>{
+  tabs.forEach(x=>x.classList.remove("active"));t.classList.add("active");
+  Object.values(panels).forEach(p=>p.classList.remove("show"));
+  const key=t.dataset.tab;panels[key].classList.add("show");
+  if(key==="model"&&onTabShow)onTabShow();
+}));
+
+/* ================= animation ================= */
+(function(){
+  const scene=document.getElementById("scene");
+  const cath=document.getElementById("cath");
+  const balloon=document.getElementById("balloon");
+  const clot=document.getElementById("clot");
+  const press=document.getElementById("press");
+  const okBadge=document.getElementById("okBadge");
+  const vL=document.getElementById("vesselL"),vR=document.getElementById("vesselR");
+  const stepTag=document.getElementById("stepTag");
+  const caption=document.getElementById("caption");
+  const prog=document.getElementById("prog");
+  const pills=[...document.querySelectorAll(".pill")];
+  const playBtn=document.getElementById("playBtn"),playLbl=document.getElementById("playLabel");
+  const resetBtn=document.getElementById("resetBtn"),loopBtn=document.getElementById("loopBtn");
+
+  const CAP=[
+    "<b>Bleeding vessels inside the wound tract.</b> A penetrating wound leaves vessels bleeding deep inside where a hand can't reach.",
+    "<b>Slim catheter inserted, balloon deflated.</b> The thin catheter with its collapsed balloon/gel tip slides into the wound tract.",
+    "<b>Balloon expands — internal pressure on vessels.</b> The balloon inflates to fill the cavity, pressing the vessels shut from inside (tamponade).",
+    "<b>Clotting agent speeds clotting — bleeding stops.</b> The surface releases a clotting agent; pressure + clotting seals the wound."
+  ];
+  const STEP_MS=2100;
+
+  const st=document.createElementNS("http://www.w3.org/2000/svg","style");
+  st.textContent=`
+    #cath{transition:transform 1s cubic-bezier(.34,1.15,.5,1),opacity .5s}
+    #balloon{transition:rx .9s cubic-bezier(.34,1.35,.5,1),ry .9s cubic-bezier(.34,1.35,.5,1),cy .9s ease}
+    #clot,#press{transition:opacity .6s ease}
+    #vesselL,#vesselR{transition:transform .9s ease}
+    #okBadge{transition:opacity .6s ease .3s,transform .6s cubic-bezier(.34,1.4,.5,1) .3s}
+    .bleedL circle{animation:bl 1.6s ease-in infinite}
+    .bleedR circle{animation:br 1.6s ease-in infinite}
+    .bleedL circle:nth-child(2){animation-delay:.5s}.bleedL circle:nth-child(3){animation-delay:1s}
+    .bleedR circle:nth-child(2){animation-delay:.5s}.bleedR circle:nth-child(3){animation-delay:1s}
+    @keyframes bl{0%{transform:translate(0,0);opacity:.9}100%{transform:translate(34px,26px);opacity:0}}
+    @keyframes br{0%{transform:translate(0,0);opacity:.9}100%{transform:translate(-34px,26px);opacity:0}}
+    .bleeding-off .bleed{animation:none;opacity:0;transition:opacity .5s}
+  `;
+  scene.appendChild(st);
+
+  let step=0,playing=false,loop=false,timer=null;
+
+  function applyStep(n){
+    step=n;
+    stepTag.textContent="Step "+(n+1)+" / 4";
+    caption.innerHTML=CAP[n];
+    prog.style.width=((n+1)/4*100)+"%";
+    pills.forEach((b,i)=>b.classList.toggle("active",i===n));
+
+    // catheter slides in from step 1
+    if(n>=1){cath.setAttribute("transform","translate(0,0)");cath.style.opacity="1";}
+    else{cath.setAttribute("transform","translate(0,-230)");cath.style.opacity="0";}
+
+    // balloon inflate from step 2
+    if(n>=2){balloon.setAttribute("rx",56);balloon.setAttribute("ry",62);balloon.setAttribute("cy",232);}
+    else{balloon.setAttribute("rx",9);balloon.setAttribute("ry",22);balloon.setAttribute("cy",240);}
+
+    // vessels compressed outward when balloon expands
+    if(n>=2){vL.setAttribute("transform","translate(-16,0)");vR.setAttribute("transform","translate(16,0)");}
+    else{vL.setAttribute("transform","translate(0,0)");vR.setAttribute("transform","translate(0,0)");}
+
+    // tamponade arrows on expand
+    press.style.opacity=(n>=2?"1":"0");
+
+    // clotting agent + bleeding stops on step 3
+    if(n>=3){clot.style.opacity="1";scene.classList.add("bleeding-off");okBadge.style.opacity="1";okBadge.setAttribute("transform","translate(320,320)");}
+    else{clot.style.opacity="0";scene.classList.remove("bleeding-off");okBadge.style.opacity="0";okBadge.setAttribute("transform","translate(320,338)");}
+  }
+
+  function setPlayIcon(p){playBtn.querySelector("svg path").setAttribute("d",p?"M6 5h4v14H6zM14 5h4v14h-4z":"M8 5v14l11-7z");}
+  function stopPlay(){playing=false;clearTimeout(timer);playLbl.textContent="Play";setPlayIcon(false);}
+  function scheduleNext(){
+    if(!playing)return;
+    if(step>=3){
+      if(loop){timer=setTimeout(()=>{if(!playing)return;applyStep(0);timer=setTimeout(scheduleNext,STEP_MS);},1500);}
+      else stopPlay();
+      return;
+    }
+    applyStep(step+1);
+    timer=setTimeout(scheduleNext,STEP_MS);
+  }
+  function startPlay(){
+    if(step>=3&&!loop)applyStep(0);
+    playing=true;playLbl.textContent="Pause";setPlayIcon(true);
+    timer=setTimeout(scheduleNext,STEP_MS*0.55);
+  }
+
+  playBtn.addEventListener("click",()=>playing?stopPlay():startPlay());
+  resetBtn.addEventListener("click",()=>{stopPlay();applyStep(0);});
+  loopBtn.addEventListener("click",()=>{loop=!loop;loopBtn.classList.toggle("on",loop);if(loop&&!playing)startPlay();});
+  pills.forEach(b=>b.addEventListener("click",()=>{stopPlay();applyStep(+b.dataset.step);}));
+  applyStep(0);
+})();
+</script>
+
+<script>
+/* ================= 3D balloon-catheter ================= */
+(function(){
+  const canvas=document.getElementById("three-canvas");
+  const fallback=document.getElementById("modelFallback");
+  const spinBtn=document.getElementById("spinBtn");
+  if(typeof THREE==="undefined"||!THREE.OrbitControls){fallback.style.display="grid";return;}
+
+  let renderer;
+  try{renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});}
+  catch(e){fallback.style.display="grid";return;}
+
+  const stage=canvas.parentElement;
+  const size=()=>({w:stage.clientWidth,h:stage.clientHeight||420});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(size().w,size().h,false);
+
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(40,size().w/size().h,0.1,100);
+  camera.position.set(2.4,2.4,9.8);
+
+  const controls=new THREE.OrbitControls(camera,renderer.domElement);
+  controls.enableDamping=true;controls.dampingFactor=0.08;controls.enablePan=false;
+  controls.enableZoom=true;controls.minDistance=4;controls.maxDistance=17;
+  controls.autoRotate=false;controls.autoRotateSpeed=1.4;
+  controls.target.set(-0.8,0,0);
+
+  scene.add(new THREE.AmbientLight(0xffffff,0.75));
+  const key=new THREE.DirectionalLight(0xffffff,0.95);key.position.set(5,8,6);scene.add(key);
+  const rim=new THREE.DirectionalLight(0x9dc4ff,0.5);rim.position.set(-6,2,-4);scene.add(rim);
+  const fill=new THREE.DirectionalLight(0xffffff,0.35);fill.position.set(0,-4,4);scene.add(fill);
+
+  const matBody=new THREE.MeshStandardMaterial({color:0xf3f6fb,roughness:0.35,metalness:0.05});
+  const matGrip=new THREE.MeshStandardMaterial({color:0x2563eb,roughness:0.45});
+  const matAcc=new THREE.MeshStandardMaterial({color:0x14b8a6,roughness:0.3,metalness:0.1});
+  const matDark=new THREE.MeshStandardMaterial({color:0x334155,roughness:0.5});
+  const matShaft=new THREE.MeshStandardMaterial({color:0xdbe3ef,roughness:0.3,metalness:0.15});
+  const matBalloon=new THREE.MeshStandardMaterial({color:0x2fd0be,roughness:0.15,metalness:0.05,transparent:true,opacity:0.82});
+
+  const device=new THREE.Group();
+
+  // rubberized, matte, high-friction grip material
+  const matRubber=new THREE.MeshStandardMaterial({color:0x263445,roughness:0.98,metalness:0.0});
+
+  // ---- ERGONOMIC CONTOURED HANDLE ----
+  // A palm-filling barrel with a central swell and tapered ends (lathe profile),
+  // so the hand wraps it naturally and there's only one obvious way to hold it.
+  const profile=[
+    [0.03,-1.12],[0.34,-1.06],[0.50,-0.86],[0.60,-0.50],[0.65,-0.12],
+    [0.66, 0.18],[0.62, 0.55],[0.52, 0.85],[0.36, 1.04],[0.03, 1.12]
+  ].map(p=>new THREE.Vector2(p[0],p[1]));
+  function barrelR(py){                 // handle radius at a given position along its axis
+    for(let i=0;i<profile.length-1;i++){
+      const a=profile[i],b=profile[i+1];
+      if(py>=a.y&&py<=b.y){const f=(py-a.y)/(b.y-a.y);return a.x+(b.x-a.x)*f;}
+    }
+    return 0.5;
+  }
+  const surfAt=dx=>barrelR(-(dx+1.7));  // surface radius at device-x (handle centered at x=-1.7)
+
+  const handle=new THREE.Mesh(new THREE.LatheGeometry(profile,56),matBody);
+  handle.rotation.z=Math.PI/2;handle.position.x=-1.7;device.add(handle);
+
+  // ---- ANTI-SLIP GRIP TEXTURE ----
+  // Rubberized ridge rings wrapping the finger zone = visible friction / finger grooves.
+  const gripZone=new THREE.Group();
+  for(let gx=-2.5; gx<=-1.05; gx+=0.185){
+    const rib=new THREE.Mesh(new THREE.TorusGeometry(surfAt(gx)+0.012,0.032,14,48),matRubber);
+    rib.rotation.y=Math.PI/2;rib.position.x=gx;gripZone.add(rib);
+  }
+  device.add(gripZone);
+
+  // front finger-guard flare — stops the hand sliding forward onto the catheter
+  const guard=new THREE.Mesh(new THREE.TorusGeometry(surfAt(-1.02)+0.07,0.06,18,48),matAcc);
+  guard.rotation.y=Math.PI/2;guard.position.x=-1.02;device.add(guard);
+
+  // ---- THUMB REST + ACTUATION POINT ----
+  // A dished rest on top (palm/back side) with a domed accent button, so the thumb
+  // instinctively lands where you press to deploy.
+  const thumbX=-1.55, topY=surfAt(thumbX);   // sits forward of center, where the thumb naturally rests
+  const rest=new THREE.Mesh(new THREE.TorusGeometry(0.33,0.055,18,44),matDark);
+  rest.rotation.x=Math.PI/2;rest.position.set(thumbX,topY+0.02,0);device.add(rest);
+  const dish=new THREE.Mesh(new THREE.SphereGeometry(0.31,32,20,0,Math.PI*2,0,Math.PI/2),matBody);
+  dish.scale.y=0.35;dish.rotation.x=Math.PI;dish.position.set(thumbX,topY+0.05,0);device.add(dish);
+
+  const thumbBtn=new THREE.Group();
+  const tCap =new THREE.Mesh(new THREE.CylinderGeometry(0.23,0.26,0.16,36),matAcc);tCap.position.y=0.08;
+  const tDome=new THREE.Mesh(new THREE.SphereGeometry(0.23,32,22),matAcc);tDome.scale.y=0.5;tDome.position.y=0.15;
+  thumbBtn.add(tCap,tDome);
+  const thumbBaseY=topY+0.06;
+  thumbBtn.position.set(thumbX,thumbBaseY,0);
+  device.add(thumbBtn);
+
+  // ---- 3D CALLOUT LABELS ----
+  const labelGroup=new THREE.Group();device.add(labelGroup);
+  function roundRect(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
+  function makeLabel(text,accent){
+    const fs=46,padX=28,padY=17,dot=40;
+    const c=document.createElement('canvas'),g=c.getContext('2d');
+    g.font=`700 ${fs}px Inter, Arial, sans-serif`;
+    c.width=Math.ceil(g.measureText(text).width)+padX*2+dot;
+    c.height=fs+padY*2;
+    g.font=`700 ${fs}px Inter, Arial, sans-serif`;
+    g.fillStyle='rgba(255,255,255,0.97)';g.strokeStyle='#dbe3ef';g.lineWidth=3;
+    roundRect(g,2,2,c.width-4,c.height-4,c.height/2);g.fill();g.stroke();
+    g.fillStyle=accent;g.beginPath();g.arc(padX+8,c.height/2,10,0,Math.PI*2);g.fill();
+    g.fillStyle='#0f172a';g.textBaseline='middle';g.fillText(text,padX+dot-6,c.height/2+2);
+    const tex=new THREE.CanvasTexture(c);tex.anisotropy=8;
+    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false}));
+    sp.renderOrder=20;const s=0.0058;sp.scale.set(c.width*s,c.height*s,1);return sp;
+  }
+  function callout(text,accent,fx,fy,fz,lx,ly,lz){
+    const feat=new THREE.Vector3(fx,fy,fz),lab=new THREE.Vector3(lx,ly,lz);
+    const d=new THREE.Mesh(new THREE.SphereGeometry(0.05,16,12),new THREE.MeshBasicMaterial({color:accent}));
+    d.position.copy(feat);d.renderOrder=18;labelGroup.add(d);
+    const ln=new THREE.Line(new THREE.BufferGeometry().setFromPoints([feat,lab]),
+      new THREE.LineBasicMaterial({color:0x94a3b8,transparent:true,depthTest:false}));
+    ln.renderOrder=19;labelGroup.add(ln);
+    const sp=makeLabel(text,accent);sp.position.copy(lab);labelGroup.add(sp);
+  }
+  callout('Ergonomic contour','#2563eb', -1.55,0.64,0.28,  -1.4,2.05,0.28);
+  callout('Anti-slip grip texture','#0d9488', -1.9,-0.55,0.28,  -1.7,-2.0,0.28);
+  callout('Thumb actuation','#14b8a6', thumbX,topY+0.22,0,  -3.35,1.7,0);
+
+  // soft, flexible silicone material for an atraumatic catheter (won't injure on insertion)
+  const matSoft=new THREE.MeshStandardMaterial({color:0xe6eefa,roughness:0.55,metalness:0.02});
+
+  // flexible catheter shaft — a gently curved soft tube (a bend reads as "flexible",
+  // a straight cylinder reads as a hard pipe)
+  const curve=new THREE.CatmullRomCurve3([
+    new THREE.Vector3(-0.6, 0.00, 0.00),
+    new THREE.Vector3( 0.5, 0.06, 0.02),
+    new THREE.Vector3( 1.5,-0.08, 0.06),
+    new THREE.Vector3( 2.4,-0.38, 0.12),
+    new THREE.Vector3( 2.9,-0.62, 0.16)
+  ]);
+  const shaft=new THREE.Mesh(new THREE.TubeGeometry(curve,80,0.10,24,false),matSoft);device.add(shaft);
+  // rounded cap where it exits the handle
+  const startCap=new THREE.Mesh(new THREE.SphereGeometry(0.10,18,14),matSoft);startCap.position.copy(curve.getPointAt(0));device.add(startCap);
+
+  // balloon + soft rounded nose, aligned to the tube's end direction so they follow the bend
+  const tipGroup=new THREE.Group();
+  tipGroup.position.copy(curve.getPointAt(1));
+  tipGroup.quaternion.setFromUnitVectors(new THREE.Vector3(1,0,0), curve.getTangentAt(1).normalize());
+
+  const balloon=new THREE.Mesh(new THREE.SphereGeometry(0.5,40,32),matBalloon);
+  balloon.scale.set(1.6,0.34,0.34);balloon.position.x=0.55;tipGroup.add(balloon);
+  // soft, rounded atraumatic nose — smooth so it doesn't hurt on insertion (no hard edges)
+  const tip=new THREE.Mesh(new THREE.SphereGeometry(0.28,32,24),matSoft);tip.scale.x=1.3;tip.position.x=1.15;tipGroup.add(tip);
+  device.add(tipGroup);
+
+  // ========= INTEGRATED GEL-POD + THUMB-BUTTON MECHANISM (added feature) =========
+  // Internal parts are drawn over the shell (depthTest off) so the pod/plunger inside
+  // the body stay visible — a concept "see-through" view; the shell itself is unchanged.
+  const matGel=new THREE.MeshStandardMaterial({color:0x2fd0be,roughness:0.15,metalness:0.05,transparent:true,opacity:0.85,depthTest:false,depthWrite:false});
+  const matInternal=new THREE.MeshStandardMaterial({color:0x334155,roughness:0.5,depthTest:false});
+
+  // hole / opening in the BACK where the pod slots directly into the body
+  const port=new THREE.Mesh(new THREE.TorusGeometry(0.30,0.05,16,40),matDark);
+  port.rotation.y=Math.PI/2;port.position.x=-2.78;device.add(port);
+
+  // sealed gel POD that sits WITHIN the device body (no external housing)
+  const pod=new THREE.Group();
+  const podBody=new THREE.Mesh(new THREE.CylinderGeometry(0.24,0.24,0.62,32),matGel);podBody.rotation.z=Math.PI/2;podBody.renderOrder=6;
+  const podCap=new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.26,0.10,32),matInternal);podCap.rotation.z=Math.PI/2;podCap.position.x=-0.36;podCap.renderOrder=6;
+  pod.add(podBody,podCap);
+  const podOutX=-4.2, podLoadedX=-2.35;
+  pod.position.x=podLoadedX;device.add(pod);   // pre-loaded inside the body for the unified demo
+
+  // INTERNAL plunger driven by the thumb button (stays inside the body)
+  const piston=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.22,0.12,28),matInternal);
+  piston.rotation.z=Math.PI/2;piston.renderOrder=6;
+  const pistonRestX=podLoadedX-0.36, pistonEndX=podLoadedX+0.26;
+  piston.position.x=pistonRestX;device.add(piston);
+
+  // gel bolus that travels forward and out the tip
+  const blob=new THREE.Mesh(new THREE.SphereGeometry(0.15,24,18),matGel);blob.renderOrder=6;blob.visible=false;device.add(blob);
+
+  // path: through the body, then along the catheter curve, out the tip
+  function gelPos(u){
+    if(u<=0.45){const k=u/0.45;return new THREE.Vector3(-2.2+((-0.6)-(-2.2))*k,0,0);}
+    return curve.getPointAt(Math.min(1,(u-0.45)/0.55));
+  }
+  // (deployment is driven by the unified demo sequence further below)
+  // ===============================================================================
+
+  device.position.x=0.1;device.rotation.y=-0.35;scene.add(device);
+
+  // fake contact shadow
+  const shadow=new THREE.Mesh(new THREE.CircleGeometry(3.0,48),new THREE.MeshBasicMaterial({color:0x0f2a5e,transparent:true,opacity:0.09}));
+  shadow.rotation.x=-Math.PI/2;shadow.position.y=-1.35;shadow.scale.x=1.5;scene.add(shadow);
+
+  function resize(){const{w,h}=size();renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+  window.addEventListener("resize",resize);
+  onTabShow=()=>setTimeout(resize,50);
+
+  spinBtn.addEventListener("click",()=>{controls.autoRotate=!controls.autoRotate;spinBtn.classList.toggle("on",controls.autoRotate);});
+  const labelBtn=document.getElementById("labelBtn");
+  labelBtn.addEventListener("click",()=>{labelGroup.visible=!labelGroup.visible;labelBtn.classList.toggle("on",labelGroup.visible);});
+  controls.addEventListener("start",()=>{controls.autoRotate=false;spinBtn.classList.remove("on");});
+
+  // press the thumb button with a click (raycast onto the cap/dome)
+  const ray=new THREE.Raycaster(),ptr=new THREE.Vector2();
+  let press=0;                    // 1 = fully pressed, eases back to 0
+  function hitThumb(e){
+    const r=canvas.getBoundingClientRect();
+    ptr.x=((e.clientX-r.left)/r.width)*2-1;
+    ptr.y=-((e.clientY-r.top)/r.height)*2+1;
+    ray.setFromCamera(ptr,camera);
+    return ray.intersectObjects([tCap,tDome],false).length>0;
+  }
+  let inflate=0,inflateTarget=0;      // 0 = deflated tip, 1 = fully inflated
+  canvas.addEventListener("pointerdown",e=>{
+    if(hitThumb(e)){ press=1; inflateTarget = inflateTarget<0.5 ? 1 : 0; }   // each press toggles inflate/deflate
+  });
+  canvas.addEventListener("pointermove",e=>{ canvas.style.cursor=hitThumb(e)?"pointer":"grab"; });
+
+  // deflated vs inflated balloon dimensions (scale on the base sphere)
+  const DEF={x:1.6,y:0.34,z:0.34}, INF={x:1.95,y:1.55,z:1.55};
+
+  // ================= UNIFIED DEMO: DEVICE + STYLIZED WOUND CROSS-SECTION =================
+  device.updateWorldMatrix(true,true);
+  const seatedPos=device.position.clone();
+  const tipWorld=new THREE.Vector3(); balloon.getWorldPosition(tipWorld);
+  const fwd=new THREE.Vector3(1,0,0).applyQuaternion(tipGroup.getWorldQuaternion(new THREE.Quaternion())).normalize();
+
+  // orient the wound as a cross-section: local +x = catheter axis, local +z faces the camera
+  const woundGroup=new THREE.Group();
+  { const xA=fwd.clone();
+    let zA=new THREE.Vector3(0,0,1); zA.sub(xA.clone().multiplyScalar(zA.dot(xA)));
+    if(zA.lengthSq()<1e-4) zA.set(0,1,0); zA.normalize();
+    const up=new THREE.Vector3().crossVectors(zA,xA).normalize();
+    woundGroup.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xA,up,zA));
+  }
+  woundGroup.position.copy(tipWorld);scene.add(woundGroup);
+
+  // ============ REALISTIC SKIN CROSS-SECTION ============
+  // Penetrating-wound view: the device pierces the skin (left) and the channel opens
+  // into a rounded cavity. One natural, subtly mottled skin tone (no distinct layers),
+  // gently shaded with rounded/beveled edges and minimal blood.
+  const surfaceX=-0.75, backX=2.1, wTop=1.7;
+  const depthX=backX-surfaceX;
+
+  const rrShape=(x,y,w,h,r)=>{const s=new THREE.Shape();
+    s.moveTo(x+r,y);s.lineTo(x+w-r,y);s.quadraticCurveTo(x+w,y,x+w,y+r);
+    s.lineTo(x+w,y+h-r);s.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    s.lineTo(x+r,y+h);s.quadraticCurveTo(x,y+h,x,y+h-r);
+    s.lineTo(x,y+r);s.quadraticCurveTo(x,y,x+r,y);return s;};
+
+  // UV generator that maps shape space (x=depth, y=height) to normalized 0..1 on every
+  // face — so front cap AND the channel walls all show the correct layer for their depth.
+  const nu=x=>(x-surfaceX)/depthX, nv=y=>(y+wTop)/(2*wTop);
+  const skinUV={
+    generateTopUV:(g,v,a,b,c)=>[
+      new THREE.Vector2(nu(v[a*3]),nv(v[a*3+1])),
+      new THREE.Vector2(nu(v[b*3]),nv(v[b*3+1])),
+      new THREE.Vector2(nu(v[c*3]),nv(v[c*3+1]))],
+    generateSideWallUV:(g,v,a,b,c,d)=>{const f=i=>new THREE.Vector2(nu(v[i*3]),nv(v[i*3+1]));
+      return [f(a),f(b),f(c),f(d)];}
+  };
+  const exOpt={depth:0.8,bevelEnabled:true,bevelThickness:0.12,bevelSize:0.12,bevelSegments:4,curveSegments:36,UVGenerator:skinUV};
+
+  // -- procedurally painted skin texture: one natural skin tone, subtly mottled (no layers) --
+  function makeSkinTexture(darken){
+    const W=1024,H=512,c=document.createElement('canvas');c.width=W;c.height=H;
+    const g=c.getContext('2d');
+    // natural skin tone base with a gentle diagonal light-to-shadow gradient
+    let gr=g.createLinearGradient(0,0,W,H);
+    gr.addColorStop(0,'#f0c3ad');gr.addColorStop(.5,'#e8b19c');gr.addColorStop(1,'#dda28d');
+    g.fillStyle=gr;g.fillRect(0,0,W,H);
+    // soft mottling — large, low-contrast warm/cool blotches so the tone reads as living skin
+    for(let i=0;i<70;i++){
+      const x=Math.random()*W,y=Math.random()*H,r=60+Math.random()*140;
+      const warm=Math.random()<.5;
+      const rg=g.createRadialGradient(x,y,0,x,y,r);
+      rg.addColorStop(0,warm?'rgba(235,165,140,0.16)':'rgba(210,150,150,0.13)');
+      rg.addColorStop(1,'rgba(0,0,0,0)');
+      g.fillStyle=rg;g.beginPath();g.arc(x,y,r,0,Math.PI*2);g.fill();
+    }
+    // fine pores / speckle so no area looks flat
+    for(let i=0;i<9000;i++){const x=Math.random()*W,y=Math.random()*H;
+      g.fillStyle='rgba('+(Math.random()<.5?'255,240,225':'150,95,80')+','+(Math.random()*0.06)+')';
+      g.fillRect(x,y,1.5,1.5);}
+    // very faint skin creases
+    g.strokeStyle='rgba(160,105,90,0.08)';g.lineWidth=1;
+    for(let i=0;i<40;i++){const y=Math.random()*H;g.beginPath();
+      g.moveTo(0,y);g.bezierCurveTo(W*.3,y+(Math.random()*20-10),W*.7,y+(Math.random()*20-10),W,y+(Math.random()*20-10));g.stroke();}
+    // gentle vignette for soft 3-D shading
+    let vg=g.createRadialGradient(W*.45,H*.4,H*.2,W*.5,H*.5,W*.7);
+    vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(70,35,30,0.18)');
+    g.fillStyle=vg;g.fillRect(0,0,W,H);
+    if(darken){g.fillStyle='rgba(45,22,20,0.5)';g.fillRect(0,0,W,H);}   // deeper tissue behind the tract
+    const tex=new THREE.CanvasTexture(c);tex.anisotropy=8;
+    tex.wrapS=tex.wrapT=THREE.ClampToEdgeWrapping;
+    return tex;
+  }
+
+  // deep tissue behind the channel so the wound shows depth, not emptiness
+  const deepBack=new THREE.Mesh(
+    new THREE.ExtrudeGeometry(rrShape(surfaceX,-wTop,depthX,2*wTop,0.4),
+      {depth:0.5,bevelEnabled:true,bevelThickness:0.08,bevelSize:0.08,bevelSegments:2,curveSegments:24,UVGenerator:skinUV}),
+    new THREE.MeshStandardMaterial({map:makeSkinTexture(true),roughness:0.95,metalness:0}));
+  deepBack.position.z=-1.45;woundGroup.add(deepBack);
+
+  // dark, non-gory wound-cavity shading seen through the opening
+  const cavShadow=new THREE.Mesh(new THREE.CircleGeometry(0.6,40),
+    new THREE.MeshStandardMaterial({color:0x6e352c,roughness:0.9}));
+  cavShadow.position.set(0.2,0,-0.9);woundGroup.add(cavShadow);
+
+  // main layered tissue block with the WOUND CHANNEL cut through all layers
+  const skinSh=new THREE.Shape();
+  skinSh.moveTo(surfaceX,wTop);
+  skinSh.lineTo(backX-0.35,wTop);skinSh.quadraticCurveTo(backX,wTop,backX,wTop-0.35);
+  skinSh.lineTo(backX,-wTop+0.35);skinSh.quadraticCurveTo(backX,-wTop,backX-0.35,-wTop);
+  skinSh.lineTo(surfaceX,-wTop);
+  skinSh.lineTo(surfaceX,-0.5);                              // lower lip of the opening
+  skinSh.quadraticCurveTo(-0.28,-0.5, 0.15,-0.6);            // channel lower wall
+  skinSh.bezierCurveTo(0.62,-0.62, 0.82,-0.32, 0.82,0);      // rounded cavity (lower)
+  skinSh.bezierCurveTo(0.82,0.32, 0.62,0.62, 0.15,0.6);      // rounded cavity (upper)
+  skinSh.quadraticCurveTo(-0.28,0.5, surfaceX,0.5);          // channel upper wall
+  skinSh.lineTo(surfaceX,wTop);
+  const skin=new THREE.Mesh(new THREE.ExtrudeGeometry(skinSh,exOpt),
+    new THREE.MeshStandardMaterial({map:makeSkinTexture(false),roughness:0.9,metalness:0.02}));
+  skin.position.z=-0.8;woundGroup.add(skin);
+
+  // bleeding vessels lining the wound tract
+  const matVessel=new THREE.MeshStandardMaterial({color:0xc23b3b,roughness:0.5});
+  const mkVessel=y=>{const v=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,1.7,20),matVessel);v.rotation.z=Math.PI/2;v.position.set(0.2,y,0.02);return v;};
+  const vU=mkVessel(0.30), vD=mkVessel(-0.30); woundGroup.add(vU,vD);
+  const applySeal=s=>{vU.position.y=0.30+0.16*s;vD.position.y=-0.30-0.16*s;const sc=1-0.6*s;vU.scale.set(1,sc,sc);vD.scale.set(1,sc,sc);};
+
+  // stylized (non-gory) bleeding: small drops that seep out of the tract
+  const bleedDrops=[];
+  for(let i=0;i<6;i++){const s=i<3?1:-1;
+    const d=new THREE.Mesh(new THREE.SphereGeometry(0.06,12,10),new THREE.MeshBasicMaterial({color:0xe05a5a,transparent:true}));
+    d.userData={y:0.24*s, ph:(i%3)/3};d.position.set(0.1,d.userData.y,0.06);woundGroup.add(d);bleedDrops.push(d);
+  }
+  let bleeding=true;
+  function animateBleed(){
+    const t=performance.now()/1000;
+    bleedDrops.forEach((d,i)=>{
+      if(!bleeding){d.visible=false;return;}
+      d.visible=true;const ph=(t*0.7+d.userData.ph+i*0.04)%1;
+      d.position.x=0.1-ph*1.1;d.material.opacity=0.85*(1-ph);
+    });
+  }
+
+  // "bleeding stopped" marker + billboarded step labels
+  const stoppedLabel=makeLabel('Bleeding stopped ✓','#16a34a');stoppedLabel.visible=false;
+  stoppedLabel.position.copy(tipWorld).add(new THREE.Vector3(0,1.7,0.4));scene.add(stoppedLabel);
+  const mid=seatedPos.clone().add(tipWorld).multiplyScalar(0.5);
+  const STEP_TXT=['Insert into wound','Press thumb button','Gel travels through the tube','Gel expands in the cavity','Presses vessels — bleeding stops'];
+  const stepSprites=STEP_TXT.map((t,i)=>{const sp=makeLabel(t,i<4?'#2563eb':'#0d9488');sp.visible=false;sp.position.copy(mid).add(new THREE.Vector3(0,3.1,0.3));scene.add(sp);return sp;});
+  const showStep=i=>stepSprites.forEach((sp,k)=>sp.visible=(k===i));
+
+  // frame both device and wound
+  controls.target.copy(mid);
+  camera.position.set(mid.x+1.8, mid.y+2.4, mid.z+11.5);
+  controls.maxDistance=26;
+
+  // ---- sequence timeline (seconds): insert → press → travel → expand → seal ----
+  const P=[1.4,0.8,1.4,1.1,1.3], T=[]; { let a=0; for(const p of P){a+=p;T.push(a);} }
+  const PB=2.4, backPos=seatedPos.clone().addScaledVector(fwd,-PB);
+  let seqT=null, loopSeq=true, gelPress=0;
+  const ease=t=>t*t*(3-2*t);
+  function resetSeq(){
+    device.position.copy(backPos);
+    pod.position.x=podLoadedX;piston.position.x=pistonRestX;podBody.scale.x=1;
+    blob.visible=false;inflate=0;inflateTarget=0;gelPress=0;
+    bleeding=true;applySeal(0);stoppedLabel.visible=false;showStep(-1);
+  }
+  function startSeq(){resetSeq();seqT=performance.now();}
+  function updateSeq(){
+    if(seqT===null)return;
+    const e=(performance.now()-seqT)/1000;
+    if(e<T[0]){device.position.copy(backPos).lerp(seatedPos,ease(e/P[0]));showStep(0);}
+    else device.position.copy(seatedPos);
+    if(e>=T[0]&&e<T[1]){gelPress=ease((e-T[0])/P[1]);showStep(1);}
+    if(e>=T[1]&&e<T[2]){gelPress=1;const k=(e-T[1])/P[2];
+      piston.position.x=pistonRestX+(pistonEndX-pistonRestX)*k;
+      blob.visible=true;blob.position.copy(gelPos(k));podBody.scale.x=Math.max(0.12,1-0.9*k);showStep(2);}
+    else if(e>=T[2]){blob.visible=false;piston.position.x=pistonEndX;}
+    if(e>=T[2]&&e<T[3]){gelPress=0;inflateTarget=1;showStep(3);}
+    if(e>=T[3]&&e<T[4]){const k=ease((e-T[3])/P[4]);applySeal(k);if(k>0.4)bleeding=false;stoppedLabel.visible=k>0.6;showStep(4);}
+    if(e>=T[4]){applySeal(1);bleeding=false;stoppedLabel.visible=true;showStep(4);
+      if(loopSeq){if(e>T[4]+1.6)startSeq();}else seqT=null;}
+  }
+  document.getElementById('gelBtn').addEventListener('click',startSeq);
+  const loopSeqBtn=document.getElementById('loopSeqBtn');
+  loopSeqBtn.addEventListener('click',()=>{loopSeq=!loopSeq;loopSeqBtn.classList.toggle('on',loopSeq);if(loopSeq&&seqT===null)startSeq();});
+  resetSeq();
+  setTimeout(()=>{if(seqT===null)startSeq();},900);
+  // =====================================================================================
+
+  (function loop(){
+    requestAnimationFrame(loop);
+    updateSeq();
+    animateBleed();
+    if(press>0) press=Math.max(0,press-0.05);
+    thumbBtn.position.y=thumbBaseY-0.13*Math.max(press,gelPress);   // sink on thumb press or gel deploy
+
+    inflate += (inflateTarget-inflate)*0.10;   // ease toward target
+    balloon.scale.set(
+      DEF.x+(INF.x-DEF.x)*inflate,
+      DEF.y+(INF.y-DEF.y)*inflate,
+      DEF.z+(INF.z-DEF.z)*inflate
+    );
+    // brighten the gel slightly as it fills
+    matBalloon.opacity=0.78+0.12*inflate;
+
+    controls.update();
+    renderer.render(scene,camera);
+  })();
+  setTimeout(resize,60);
+})();
+</script>
+</body>
+</html>
